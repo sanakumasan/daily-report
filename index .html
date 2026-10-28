@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乗車日報</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --background-color: #f8fafc;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.5;
+            color: var(--text-color);
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            margin-top: 0;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        h1 { font-size: 1.5rem; }
+        h2 { font-size: 1.25rem; margin-top: 24px; }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: #f1f5f9;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .summary-label { font-size: 0.85rem; color: #64748b; }
+        .summary-value { font-size: 1.25rem; font-weight: bold; margin-top: 4px; }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+        input[type="text"], input[type="number"], input[type="datetime-local"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            flex: 1;
+        }
+        button.secondary {
+            background-color: #64748b;
+        }
+        button:hover { opacity: 0.9; }
+        .etc-section-box {
+            border: 1px dashed #cbd5e1;
+            padding: 12px;
+            border-radius: 6px;
+            background: #fafafa;
+            margin-bottom: 12px;
+        }
+        .etc-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 100px auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .btn-remove {
+            background: #ef4444;
+            padding: 8px;
+            font-size: 0.8rem;
+        }
+        .search-link {
+            display: inline-block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .search-link:hover { text-decoration: underline; }
+        .record-card {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            background: white;
+        }
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+        .etc-detail-list {
+            margin: 4px 0 0 0;
+            padding-left: 20px;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚕 乗車日報</h1>
+    <p style="font-size: 0.85rem; color:#64748b; margin-top:-10px;">現在地・売上・ETCをかんたん記録</p>
+
+    <div class="summary-grid">
+        <div class="summary-card"><div class="summary-label">本日の売上</div><div class="summary-value" id="today-sales">¥0</div></div>
+        <div class="summary-card"><div class="summary-label">本日のETC</div><div class="summary-value" id="today-etc">¥0</div></div>
+        <div class="summary-card"><div class="summary-label">今月の売上</div><div class="summary-value" id="month-sales">¥0</div></div>
+        <div class="summary-card"><div class="summary-label">今月の乗車件数</div><div class="summary-value" id="month-count">0件</div></div>
+    </div>
+
+    <h2>乗車記録を追加</h2>
+    <form id="report-form" onsubmit="saveRecord(event)">
+        <div class="form-group">
+            <label>乗車日時</label>
+            <input type="datetime-local" id="ride-datetime" required>
+        </div>
+
+        <div class="form-group">
+            <label>車種</label>
+            <select id="vehicle-type">
+                <option value="普通車">普通車</option>
+                <option value="軽自動車等">軽自動車等</option>
+                <option value="中型車">中型車</option>
+                <option value="大型車">大型車</option>
+                <option value="特大車">特大車</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>📍 乗せた場所</label>
+            <input type="text" id="pickup-address" placeholder="住所（現在地から自動取得）店名・駅名など（補足）">
+            <div class="btn-group">
+                <button type="button" class="secondary" onclick="getCurrentLocation('pickup')">📍 現在地を取得</button>
+                <button type="button" class="secondary" onclick="clearField('pickup-address')">クリア</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>🏁 降ろした場所</label>
+            <input type="text" id="dropoff-address" placeholder="住所（現在地から自動取得）店名・駅名など（補足）">
+            <div class="btn-group">
+                <button type="button" class="secondary" onclick="getCurrentLocation('dropoff')">📍 現在地を取得</button>
+                <button type="button" class="secondary" onclick="clearField('dropoff-address')">クリア</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>売上金額（円）</label>
+            <input type="number" id="sales-amount" min="0" value="0">
+        </div>
+
+        <div class="form-group">
+            <label>ETC高速区間・料金</label>
+            <a href="https://www.driveplaza.com/" target="_blank" class="search-link">🌐 公式料金検索を開く (ドラぷら)</a>
+            <div class="etc-section-box">
+                <div id="etc-routes-container"></div>
+                <button type="button" class="secondary" style="padding:6px 12px; font-size:0.85rem;" onclick="addEtcRow()">＋ 区間を追加</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>ETC料金 合計（円）</label>
+            <input type="number" id="etc-amount" min="0" value="0" readonly style="background:#f1f5f9;">
+        </div>
+
+        <div class="form-group">
+            <label>メモ（任意）</label>
+            <textarea id="memo" rows="2"></textarea>
+        </div>
+
+        <div class="btn-group">
+            <button type="submit">記録を保存</button>
+            <button type="button" class="secondary" onclick="clearForm()">入力をクリア</button>
+        </div>
+    </form>
+    <p style="font-size:0.75rem; color:#64748b; margin-top:8px;">位置情報はボタンを押した時だけ取得します。店名・施設名は補足欄に入力してください。</p>
+
+    <h2>記録一覧</h2>
+    <div class="form-group">
+        <label>表示する月</label>
+        <input type="month" id="filter-month" onchange="renderRecords()">
+    </div>
+
+    <div class="btn-group" style="margin-bottom: 16px;">
+        <button type="button" onclick="exportCSV()">CSVを書き出す</button>
+        <button type="button" class="secondary" onclick="backupData()">バックアップ保存</button>
+        <button type="button" class="secondary" onclick="restoreData()">復元</button>
+    </div>
+
+    <div id="records-list"></div>
+    <p style="font-size:0.75rem; color:#64748b; margin-top:8px;">記録はこのブラウザ内に保存されます。定期的にCSVまたはバックアップを保存してください。</p>
+</div>
+
+<script>
+    let records = [];
+
+    window.onload = function() {
+        const today = new Date();
+        document.getElementById('ride-datetime').value = today.toISOString().slice(0,16);
+        document.getElementById('filter-month').value = today.toISOString().slice(0,7);
+        
+        loadRecords();
+        addEtcRow();
+    };
+
+    function loadRecords() {
+        const stored = localStorage.getItem('taxi_ride_records');
+        if (stored) {
+            try {
+                records = JSON.parse(stored);
+                records = records.map(r => ({
+                    datetime: r.datetime || r.date + "T00:00",
+                    vehicleType: r.vehicleType || "普通車",
+                    pickup: r.pickup,
+                    dropoff: r.dropoff,
+                    sales: parseInt(r.sales) || 0,
+                    etc: parseInt(r.etc) || 0,
+                    etcRoutes: r.etcRoutes || (parseInt(r.etc) > 0 ? [{entry:'', exit:'', price: parseInt(r.etc)}] : []),
+                    memo: r.memo || ''
+                }));
+            } catch(e) {
+                console.error("データ解析エラー", e);
+            }
+        }
+        renderRecords();
+    }
+
+    function addEtcRow(entry='', exit='', price=0) {
+        const container = document.getElementById('etc-routes-container');
+        const div = document.createElement('div');
+        div.className = 'etc-row';
+        div.innerHTML = `
+            <input type="text" placeholder="入口IC" value="${entry}" class="etc-entry">
+            <input type="text" placeholder="出口IC" value="${exit}" class="etc-exit">
+            <input type="number" placeholder="料金" value="${price}" class="etc-price" min="0" oninput="calculateEtcTotal()">
+            <button type="button" class="btn-remove" onclick="this.parentElement.remove(); calculateEtcTotal();">✕</button>
+        `;
+        container.appendChild(div);
+        calculateEtcTotal();
+    }
+
+    function calculateEtcTotal() {
+        let total = 0;
+        document.querySelectorAll('.etc-price').forEach(input => {
+            total += parseInt(input.value) || 0;
+        });
+        document.getElementById('etc-amount').value = total;
+    }
+
+    function saveRecord(e) {
+        e.preventDefault();
+        
+        const etcRoutes = [];
+        document.querySelectorAll('.etc-row').forEach(row => {
+            const entry = row.querySelector('.etc-entry').value;
+            const exit = row.querySelector('.etc-exit').value;
+            const price = parseInt(row.querySelector('.etc-price').value) || 0;
+            if(entry || exit || price > 0) {
+                etcRoutes.push({ entry, exit, price });
+            }
+        });
+
+        const record = {
+            datetime: document.getElementById('ride-datetime').value,
+            vehicleType: document.getElementById('vehicle-type').value,
+            pickup: document.getElementById('pickup-address').value,
+            dropoff: document.getElementById('dropoff-address').value,
+            sales: parseInt(document.getElementById('sales-amount').value) || 0,
+            etc: parseInt(document.getElementById('etc-amount').value) || 0,
+            etcRoutes: etcRoutes,
+            memo: document.getElementById('memo').value
+        };
+
+        records.push(record);
+        localStorage.setItem('taxi_ride_records', JSON.stringify(records));
+        clearForm();
+        renderRecords();
+    }
+
+    function clearForm() {
+        const today = new Date();
+        document.getElementById('ride-datetime').value = today.toISOString().slice(0,16);
+        document.getElementById('vehicle-type').value = "普通車";
+        document.getElementById('pickup-address').value = '';
+        document.getElementById('dropoff-address').value = '';
+        document.getElementById('sales-amount').value = '0';
+        document.getElementById('memo').value = '';
+        document.getElementById('etc-routes-container').innerHTML = '';
+        addEtcRow();
+    }
+
+    function renderRecords() {
+        const filterMonth = document.getElementById('filter-month').value;
+        const listContainer = document.getElementById('records-list');
+        listContainer.innerHTML = '';
+
+        let todaySales = 0, todayEtc = 0, monthSales = 0, monthCount = 0;
+        const todayStr = new Date().toISOString().slice(0,10);
+
+        const sortedRecords = [...records].sort((a,b) => b.datetime.localeCompare(a.datetime));
+
+        sortedRecords.forEach(r => {
+            const rDate = r.datetime.slice(0, 10);
+            const rMonth = r.datetime.slice(0, 7);
+
+            if (rDate === todayStr) {
+                todaySales += r.sales;
+                todayEtc += r.etc;
+            }
+            if (rMonth === filterMonth) {
+                monthSales += r.sales;
+                monthCount++;
+            }
+
+            if (rMonth === filterMonth) {
+                const card = document.createElement('div');
+                card.className = 'record-card';
+                
+                let etcDetailsHtml = '';
+                if(r.etcRoutes && r.etcRoutes.length > 0) {
+                    etcDetailsHtml = `<ul class="etc-detail-list">` + 
+                        r.etcRoutes.map(route => `<li>高速: ${route.entry || '未定'} → ${route.exit || '未定'} (${route.price}円)</li>`).join('') + 
+                        `</ul>`;
+                }
+
+                card.innerHTML = `
+                    <div class="record-header">
+                        <span>📅 ${r.datetime.replace('T', ' ')} (${r.vehicleType})</span>
+                        <strong style="color:#ef4444; cursor:pointer;" onclick="deleteRecord('${r.datetime}')">削除</strong>
+                    </div>
+                    <div>📍 ${r.pickup || '未入力'} ➡️ 🏁 ${r.dropoff || '未入力'}</div>
+                    <div style="margin-top:4px; font-weight:bold;">売上: ¥${r.sales.toLocaleString()} / ETC: ¥${r.etc.toLocaleString()}</div>
+                    ${etcDetailsHtml}
+                    ${r.memo ? `<div style="font-size:0.85rem; color:#64748b; margin-top:4px;">📝 ${r.memo}</div>` : ''}
+                `;
+                listContainer.appendChild(card);
+            }
+        });
+
+        document.getElementById('today-sales').innerText = `¥${todaySales.toLocaleString()}`;
+        document.getElementById('today-etc').innerText = `¥${todayEtc.toLocaleString()}`;
+        document.getElementById('month-sales').innerText = `¥${monthSales.toLocaleString()}`;
+        document.getElementById('month-count').innerText = `${monthCount}件`;
+    }
+
+    function deleteRecord(datetime) {
+        if(confirm('この記録を削除しますか？')) {
+            records = records.filter(r => r.datetime !== datetime);
+            localStorage.setItem('taxi_ride_records', JSON.stringify(records));
+            renderRecords();
+        }
+    }
+
+    function getCurrentLocation(type) {
+        const id = type === 'pickup' ? 'pickup-address' : 'dropoff-address';
+        if (!navigator.geolocation) {
+            alert('お使いのブラウザは位置情報に対応していません。');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                document.getElementById(id).value = `緯度:${pos.coords.latitude.toFixed(4)}, 経度:${pos.coords.longitude.toFixed(4)}`;
+            },
+            () => { alert('位置情報の取得に失敗しました。'); }
+        );
+    }
+
+    function clearField(id) { document.getElementById(id).value = ''; }
+
+    function exportCSV() {
+        const filterMonth = document.getElementById('filter-month').value;
+        const targetRecords = records.filter(r => r.datetime.slice(0, 7) === filterMonth);
+        
+        let csvContent = "\uFEFF日時,車種,乗車地,降車地,売上金額,ETC合計,高速区間内訳,メモ\n";
+        
+        targetRecords.forEach(r => {
+            const routesStr = r.etcRoutes ? r.etcRoutes.map(route => `${route.entry || ''}-${route.exit || ''}(${route.price}円)`).join('/') : '';
+            const row = [
+                r.datetime.replace('T', ' '),
+                r.vehicleType,
+                `"${r.pickup || ''}"`,
+                `"${r.dropoff || ''}"`,
+                r.sales,
+                r.etc,
+                `"${routesStr}"`,
+                `"${r.memo || ''}"`
+            ].join(',');
+            csvContent += row + "\n";
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute("download", `乗車日報_${filterMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function backupData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `taxi_report_backup.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    }
+
+    function restoreData() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files;
+            const reader = new FileReader();
+            reader.readAsText(file,'UTF-8');
+            reader.onload = readerEvent => {
+                try {
+                    const content = JSON.parse(readerEvent.target.result);
+                    if(Array.isArray(content)) {
+                        records = content;
+                        localStorage.setItem('taxi_ride_records', JSON.stringify(records));
+                        loadRecords();
+                        alert('復元が完了しました。');
+                    } else { alert('不正なファイル形式です。'); }
+                } catch(err) { alert('ファイルの読み込みに失敗しました。'); }
+            }
+        }
+        input.click();
+    }
+</script>
+</body>
+</html>
